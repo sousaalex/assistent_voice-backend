@@ -6,4 +6,4 @@ openai
 soundfile
 numpy
 torch
-kokoro-tts
+kokoro
