@@ -1,0 +1,21 @@
+# Python-generated files
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Environment variables
+.env
+
+# Test files and directories
+test/
+
+fly.toml
+.git/
+__pycache__/
+.envrc
+.venv/
