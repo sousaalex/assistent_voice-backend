@@ -1,7 +1,6 @@
 from kokoro import KPipeline
 import soundfile as sf
 import numpy as np
-import torch
 import tempfile
 import os
 from typing import Optional
