@@ -2,7 +2,7 @@
 # Servidor FastAPI rodando na porta 8080
 # BluMa | NomadEngenuity - Estrutura profissional
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Response, Header
+from fastapi import FastAPI, HTTPException, UploadFile, File, Response, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional, Dict
@@ -10,6 +10,7 @@ import uvicorn
 import os
 import shutil
 from datetime import datetime
+from starlette.middleware.base import BaseHTTPMiddleware
 from tts.model_tts import generate_wav_from_text
 from llm.llm import LLM, client, tools_config, tools_functions, get_unified_system_prompt
 from llm.conversation import ConversationManager
@@ -28,17 +29,52 @@ app = FastAPI(
     openapi_url="/openapi.json"
 )
 
+# Middleware para debug de CORS (pode ser removido em produção)
+class CORSDebugMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        origin = request.headers.get("origin")
+        method = request.method
+        
+        print(f"[CORS DEBUG] Método: {method}, Origin: {origin}")
+        
+        response = await call_next(request)
+        
+        # Log dos headers de resposta relacionados ao CORS
+        cors_headers = {k: v for k, v in response.headers.items() if k.lower().startswith('access-control')}
+        if cors_headers:
+            print(f"[CORS DEBUG] Headers de resposta: {cors_headers}")
+            
+        return response
+
+# Adicionar middleware de debug
+app.add_middleware(CORSDebugMiddleware)
+
+# Lista de origens permitidas para CORS
 origins = [
     "https://assistent-voice.vercel.app",
     "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://localhost:3000",  # Para desenvolvimento com HTTPS
 ]
-# Configurar CORS
+
+# Configurar CORS com configurações mais específicas
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Accept",
+        "Accept-Language",
+        "Content-Language",
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "Origin",
+        "Access-Control-Request-Method",
+        "Access-Control-Request-Headers",
+    ],
+    expose_headers=["*"],
 )
 
 # Configuração fixa para português
@@ -71,6 +107,20 @@ class SimpleTTSRequest(BaseModel):
 @app.get("/", tags=["Root"])
 def root():
     return {"message": "Servidor FastAPI rodando na porta 8765! 🇧🇷 Português Brasileiro"}
+
+@app.get("/health", tags=["Health"])
+def health_check():
+    """Endpoint de health check para verificar se o servidor está funcionando."""
+    return {
+        "status": "healthy",
+        "message": "Servidor funcionando corretamente",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+@app.options("/tts", tags=["TTS"])
+async def tts_options():
+    """Endpoint OPTIONS para requisições preflight CORS."""
+    return {"message": "OK"}
 
 @app.post("/tts", tags=["TTS"], summary="Processa pergunta na LLM e gera áudio em português", response_description="Áudio WAV gerado com a resposta da LLM")
 def tts_endpoint(request: TTSRequest):
@@ -131,7 +181,13 @@ def tts_endpoint(request: TTSRequest):
         # Limpar arquivo temporário
         os.remove(wav_path)
         
-        return Response(content=audio_bytes, media_type="audio/wav")
+        # Criar resposta com headers de CORS explícitos
+        response = Response(content=audio_bytes, media_type="audio/wav")
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        
+        return response
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro no fluxo LLM + TTS: {str(e)}")
@@ -153,4 +209,13 @@ def clear_conversation(session_id: str):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("app:app", host="0.0.0.0", port=port)
+    print(f"[SERVIDOR] Iniciando servidor na porta {port}")
+    print(f"[CORS] Origens permitidas: {origins}")
+    uvicorn.run(
+        "app:app", 
+        host="0.0.0.0", 
+        port=port, 
+        reload=False,
+        access_log=True,
+        log_level="info"
+    )
