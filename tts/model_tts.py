@@ -9,7 +9,7 @@ from typing import Optional
 
 def generate_wav_from_text(text: str, language: str = 'p', voice: Optional[str] = None) -> str:
     """
-    Gera arquivo WAV a partir de texto usando Kokoro TTS.
+    Gera arquivo mp3 a partir de texto usando Kokoro TTS.
     OTIMIZADO PARA PORTUGUÊS BRASILEIRO.
     
     Args:
@@ -18,7 +18,7 @@ def generate_wav_from_text(text: str, language: str = 'p', voice: Optional[str] 
         voice (str, optional): Voz específica a usar. Se None, usa voz padrão.
     
     Returns:
-        str: Caminho do arquivo WAV gerado
+        str: Caminho do arquivo mp3 gerado
         
     Raises:
         ValueError: Se idioma não suportado ou texto vazio
@@ -32,7 +32,7 @@ def generate_wav_from_text(text: str, language: str = 'p', voice: Optional[str] 
     try:
         # Configurar pipeline para o idioma
         pipeline = KPipeline(lang_code="p")
-        voice="pm_santa"
+        voice="pm_santa" 
         
         # Gerar áudio
         generator = pipeline(text, voice)
@@ -48,7 +48,7 @@ def generate_wav_from_text(text: str, language: str = 'p', voice: Optional[str] 
         audio_completo = np.concatenate(audio_chunks)
         
         # Criar arquivo temporário
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
+        with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
             wav_path = temp_file.name
         
         # Salvar áudio no arquivo temporário

@@ -17,6 +17,14 @@ primary_region = 'cdg'
   processes = ['app']
 
 [[vm]]
-  memory = '1gb'
+  memory = '2gb'
   cpu_kind = 'shared'
   cpus = 1
+
+
+# Comando para iniciar o servidor Uvicorn corretamente no Fly.io
+[experimental]
+  cmd = ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+
+[deploy]
+  release_command = "echo 'Deploying assistent-voice'"

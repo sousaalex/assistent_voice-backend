@@ -10,6 +10,7 @@ import uvicorn
 import os
 import shutil
 from datetime import datetime
+import re
 from starlette.middleware.base import BaseHTTPMiddleware
 from tts.model_tts import generate_wav_from_text
 from llm.llm import LLM, client, tools_config, tools_functions, get_unified_system_prompt
@@ -52,6 +53,7 @@ app.add_middleware(CORSDebugMiddleware)
 # Lista de origens permitidas para CORS
 origins = [
     "https://assistent-voice.vercel.app",
+    "http://assistent-voice.vercel.app",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://localhost:3000",  # Para desenvolvimento com HTTPS
@@ -104,6 +106,22 @@ class SimpleTTSRequest(BaseModel):
     text: str
     voice: Optional[str] = None
 
+def process_text_for_tts(text: str) -> str:
+    """
+    Processa o texto para melhorar a pronúncia do TTS,
+    quebrando em linhas nas pontuações (exceto vírgulas).
+    """
+    # Substitui reticências por quebra de linha
+    text = text.replace("...", "...\n")
+    
+    # Adiciona quebra de linha após pontuação seguida de espaço
+    text = re.sub(r'([.!?:]) ', r'\1\n', text)
+    
+    # Remove linhas vazias extras
+    text = re.sub(r'\n\s*\n', '\n', text)
+    
+    return text.strip()
+
 @app.get("/", tags=["Root"])
 def root():
     return {"message": "Servidor FastAPI rodando na porta 8765! 🇧🇷 Português Brasileiro"}
@@ -122,7 +140,7 @@ async def tts_options():
     """Endpoint OPTIONS para requisições preflight CORS."""
     return {"message": "OK"}
 
-@app.post("/tts", tags=["TTS"], summary="Processa pergunta na LLM e gera áudio em português", response_description="Áudio WAV gerado com a resposta da LLM")
+@app.post("/tts", tags=["TTS"], summary="Processa pergunta na LLM e gera áudio em português", response_description="Áudio mp3 gerado com a resposta da LLM")
 def tts_endpoint(request: TTSRequest):
     """
     Recebe uma pergunta em português, processa na LLM mantendo o contexto da conversa, e retorna o áudio gerado da resposta.
@@ -131,7 +149,7 @@ def tts_endpoint(request: TTSRequest):
     1. Recebe a pergunta e contexto
     2. Processa na LLM para gerar resposta, considerando histórico
     3. Converte a resposta da LLM em áudio usando TTS
-    4. Retorna o arquivo de áudio WAV
+    4. Retorna o arquivo de áudio mp3
     """
     if not request.text or not request.text.strip():
         raise HTTPException(status_code=400, detail="Pergunta não pode ser vazia.")
@@ -160,9 +178,15 @@ def tts_endpoint(request: TTSRequest):
         
         # Obter resposta da LLM
         llm_response = llm_instance.run(messages)
-        
+        print("==================RESPOSTA DA LLM=====================\n\n")
+        print(f"{llm_response}\n\n")
+        print("==================FIM RESPOSTA DA LLM=====================")
+
         if not llm_response or not llm_response.strip():
             raise HTTPException(status_code=500, detail="LLM não gerou uma resposta válida.")
+        
+        # Processar texto para melhorar pronúncia do TTS
+        processed_response = process_text_for_tts(llm_response)
         
         # Atualizar histórico da conversa
         conversation_manager.add_message(
@@ -171,8 +195,9 @@ def tts_endpoint(request: TTSRequest):
             assistant_message=llm_response
         )
         
-        # Converter resposta para áudio
+        # Converter resposta processada para áudio
         wav_path = generate_wav_from_text(llm_response, language=FIXED_LANGUAGE)
+        # wav_path = generate_wav_from_text(processed_response, language=FIXED_LANGUAGE)
         
         # Ler e retornar o arquivo de áudio
         with open(wav_path, "rb") as f:
@@ -182,7 +207,7 @@ def tts_endpoint(request: TTSRequest):
         os.remove(wav_path)
         
         # Criar resposta com headers de CORS explícitos
-        response = Response(content=audio_bytes, media_type="audio/wav")
+        response = Response(content=audio_bytes, media_type="audio/mpeg")
         response.headers["Access-Control-Allow-Origin"] = "*"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "*"
