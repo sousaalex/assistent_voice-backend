@@ -3,7 +3,11 @@ uvicorn
 requests
 python-dotenv
 openai
+openai-whisper
 soundfile
-numpy
+numpy<2.3
+numba
 kokoro
 bs4
+ffmpeg-python
+python-multipart
